@@ -1,31 +1,20 @@
-.PHONY: install lint build run compose-up compose-down logs test-compose
+# Makefile hỗ trợ chạy Docker Compose nhanh chóng
 
-# Install Node dependencies for Prism/Spectral/Newman
-install:
-	npm install
+.PHONY: compose-up compose-down logs test-compose
 
-# Lint OpenAPI contracts with Spectral
-lint:
-	npx spectral lint contracts/*.yaml
-
-# Build Docker image for API only
-build:
-	docker build -t fit4110/iot-ingestion:lab05 .
-
-# Run API container standalone (not via compose)
-run:
-	docker run --rm --name fit4110-api-lab05 -p 8000:8000 --env-file .env.example fit4110/iot-ingestion:lab05
-
-# Compose commands
 compose-up:
+	@echo "Đang build và khởi động stack..."
 	docker compose up -d --build
 
 compose-down:
+	@echo "Đang tắt và xóa stack..."
 	docker compose down
 
 logs:
+	@echo "Đang theo dõi logs của hệ thống..."
 	docker compose logs -f
 
-# Run Newman tests on compose stack
 test-compose:
-	npm run test:compose
+	@echo "Đang chạy test Newman..."
+	@mkdir -p reports
+	npx newman run postman/collections/iot_collection.postman_collection.json -e postman/environments/FIT4110_lab05_local.postman_environment.json -r cli,htmlextra,junit --reporter-junit-export reports/newman-lab05-compose.xml --reporter-htmlextra-export reports/newman-lab05-compose.html

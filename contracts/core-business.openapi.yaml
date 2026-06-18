@@ -1,0 +1,387 @@
+openapi: 3.1.0
+info:
+  title: FIT4110 Lab 05 - Core Business API
+  version: 0.5.0
+  description: |
+    Core Business Service xử lý nghiệp vụ trung tâm cho Smart Campus Operations Platform.
+    Dịch vụ này tích hợp với AI Vision, Access Gate, Notification và Analytics.
+    Cung cấp các endpoint để đánh giá chính sách và xử lý sự kiện.
+
+servers:
+  - url: http://localhost:8000
+    description: Local or Docker Compose API service
+  - url: http://localhost:4010
+    description: Prism mock server
+
+tags:
+  - name: system
+    description: Health check endpoints
+  - name: policy
+    description: Policy evaluation and retrieval
+  - name: events
+    description: Event processing and retrieval
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [system]
+      operationId: getHealth
+      summary: Kiểm tra trạng thái service
+      description: Public health check endpoint không cần xác thực.
+      security: []
+      responses:
+        "200":
+          description: Service đang hoạt động
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              examples:
+                ok:
+                  value:
+                    status: ok
+                    service: core-business
+                    version: 0.5.0
+
+  /policy/evaluate:
+    post:
+      tags: [policy]
+      operationId: evaluatePolicy
+      summary: Đánh giá chính sách truy cập
+      description: |
+        Đánh giá chính sách dựa trên subject, action và context.
+        Gọi Access Gate service để xác minh ủy quyền.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PolicyEvaluationRequest"
+            examples:
+              valid_policy:
+                value:
+                  subject_id: user-001
+                  action: enter-restricted-area
+                  context:
+                    location: area-A1
+                    time: business-hours
+                  timestamp: "2026-06-18T08:30:00+07:00"
+      responses:
+        "200":
+          description: Kết quả đánh giá chính sách
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyEvaluationResponse"
+              examples:
+                approved:
+                  value:
+                    policy_id: POL-20260618-0001
+                    subject_id: user-001
+                    action: enter-restricted-area
+                    decision: approve
+                    reason: Policy approved by default
+                    evaluated_at: "2026-06-18T08:30:01+07:00"
+        "401":
+          description: Thiếu hoặc sai token
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: Request không hợp lệ
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+  /policy:
+    get:
+      tags: [policy]
+      operationId: getPolicies
+      summary: Lấy tất cả các chính sách
+      description: Trả về danh sách tất cả các chính sách đã đánh giá.
+      responses:
+        "200":
+          description: Danh sách các chính sách
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [policies]
+                properties:
+                  policies:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PolicyEvaluationResponse"
+        "401":
+          description: Thiếu hoặc sai token
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+  /events:
+    post:
+      tags: [events]
+      operationId: processEvent
+      summary: Xử lý sự kiện từ các nguồn
+      description: |
+        Xử lý sự kiện từ IoT, AI Vision, Access Gate.
+        Gọi các service liên quan và lưu trữ kết quả.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventProcessRequest"
+            examples:
+              motion_detected:
+                value:
+                  event_id: EVT-20260618-0001
+                  event_type: motion_detected
+                  source: camera-01
+                  payload:
+                    location: lobby
+                    confidence: 0.95
+                  timestamp: "2026-06-18T08:30:00+07:00"
+              anomaly_detected:
+                value:
+                  event_id: EVT-20260618-0002
+                  event_type: anomaly_detected
+                  source: sensor-block-a
+                  payload:
+                    anomaly_score: 0.87
+                    type: temperature-spike
+                  timestamp: "2026-06-18T08:31:00+07:00"
+      responses:
+        "200":
+          description: Sự kiện đã được xử lý
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventProcessResponse"
+              examples:
+                processed:
+                  value:
+                    event_id: EVT-20260618-0001
+                    processed: true
+                    decision: approve
+                    actions_taken:
+                      - ai_vision_analysis_completed
+                      - analytics_logged
+                    processed_at: "2026-06-18T08:30:01+07:00"
+        "401":
+          description: Thiếu hoặc sai token
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: Request không hợp lệ
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+  /events/:
+    get:
+      tags: [events]
+      operationId: getEvents
+      summary: Lấy tất cả các sự kiện
+      description: Trả về danh sách tất cả các sự kiện đã xử lý.
+      responses:
+        "200":
+          description: Danh sách các sự kiện
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EventProcessResponse"
+        "401":
+          description: Thiếu hoặc sai token
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: token
+      description: Sử dụng Bearer token để xác thực
+
+  schemas:
+    PolicyDecision:
+      type: string
+      enum: [approve, reject, pending]
+      description: Quyết định chính sách
+
+    EventType:
+      type: string
+      enum: [motion_detected, anomaly_detected, access_request, alert_triggered]
+      description: Loại sự kiện
+
+    HealthResponse:
+      type: object
+      required: [status, service, version]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+          description: Trạng thái service
+          example: ok
+        service:
+          type: string
+          description: Tên service
+          example: core-business
+        version:
+          type: string
+          description: Phiên bản service
+          example: 0.5.0
+
+    PolicyEvaluationRequest:
+      type: object
+      required: [subject_id, action, timestamp]
+      properties:
+        subject_id:
+          type: string
+          minLength: 3
+          description: ID của subject (người dùng, thiết bị)
+          example: user-001
+        action:
+          type: string
+          description: Hành động cần đánh giá
+          example: enter-restricted-area
+        context:
+          type: object
+          description: Ngữ cảnh bổ sung cho đánh giá
+          example:
+            location: area-A1
+            time: business-hours
+        timestamp:
+          type: string
+          format: date-time
+          description: Thời gian yêu cầu
+          example: "2026-06-18T08:30:00+07:00"
+
+    PolicyEvaluationResponse:
+      type: object
+      required: [policy_id, subject_id, action, decision, evaluated_at]
+      properties:
+        policy_id:
+          type: string
+          pattern: "^POL-[0-9]{8}-[0-9]{4}$"
+          description: ID chính sách duy nhất
+          example: POL-20260618-0001
+        subject_id:
+          type: string
+          description: ID của subject
+          example: user-001
+        action:
+          type: string
+          description: Hành động đã đánh giá
+          example: enter-restricted-area
+        decision:
+          $ref: "#/components/schemas/PolicyDecision"
+        reason:
+          type: string
+          description: Lý do quyết định
+          example: Policy approved by default
+        evaluated_at:
+          type: string
+          format: date-time
+          description: Thời gian đánh giá
+          example: "2026-06-18T08:30:01+07:00"
+
+    EventProcessRequest:
+      type: object
+      required: [event_id, event_type, source, payload, timestamp]
+      properties:
+        event_id:
+          type: string
+          minLength: 3
+          description: ID sự kiện
+          example: EVT-20260618-0001
+        event_type:
+          $ref: "#/components/schemas/EventType"
+        source:
+          type: string
+          description: Nguồn sự kiện
+          example: camera-01
+        payload:
+          type: object
+          description: Dữ liệu sự kiện
+          example:
+            location: lobby
+            confidence: 0.95
+        timestamp:
+          type: string
+          format: date-time
+          description: Thời gian sự kiện
+          example: "2026-06-18T08:30:00+07:00"
+
+    EventProcessResponse:
+      type: object
+      required: [event_id, processed, actions_taken, processed_at]
+      properties:
+        event_id:
+          type: string
+          description: ID sự kiện
+          example: EVT-20260618-0001
+        processed:
+          type: boolean
+          description: Trạng thái xử lý
+          example: true
+        decision:
+          $ref: "#/components/schemas/PolicyDecision"
+        actions_taken:
+          type: array
+          items:
+            type: string
+          description: Các hành động đã thực hiện
+          example:
+            - ai_vision_analysis_completed
+            - analytics_logged
+        processed_at:
+          type: string
+          format: date-time
+          description: Thời gian xử lý
+          example: "2026-06-18T08:30:01+07:00"
+
+    ProblemDetails:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          description: URI đối với loại vấn đề
+          example: https://smart-campus.local/problems/validation-error
+        title:
+          type: string
+          description: Tiêu đề lỗi
+          example: Validation error
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+          description: Mã trạng thái HTTP
+          example: 422
+        detail:
+          type: string
+          description: Chi tiết về lỗi
+          example: subject_id must have at least 3 characters
+        instance:
+          type: string
+          description: URI instance của vấn đề
+          example: /policy/evaluate

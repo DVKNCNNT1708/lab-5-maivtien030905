@@ -1,8 +1,11 @@
 import os
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
+import psycopg2
+from psycopg2.extras import Json
+import requests
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -12,6 +15,17 @@ from pydantic import BaseModel, Field
 SERVICE_NAME = os.getenv("SERVICE_NAME", "iot-ingestion")
 SERVICE_VERSION = os.getenv("SERVICE_VERSION", "0.5.0")
 AUTH_TOKEN = os.getenv("AUTH_TOKEN", "local-dev-token")
+DB_HOST = os.getenv("DB_HOST", "db")
+DB_PORT = int(os.getenv("DB_PORT", "5432"))
+POSTGRES_USER = os.getenv("POSTGRES_USER", "lab05_user")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "lab05_password")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "lab05_db")
+AI_SERVICE_URL = os.getenv("AI_SERVICE_URL", "http://ai-service:9000")
+AI_SERVICE_PORT = os.getenv("AI_SERVICE_PORT", "9000")
+DB_DSN = (
+    f"dbname={POSTGRES_DB} user={POSTGRES_USER} password={POSTGRES_PASSWORD} "
+    f"host={DB_HOST} port={DB_PORT}"
+)
 
 
 app = FastAPI(
@@ -82,9 +96,81 @@ class SensorReadingCreated(BaseModel):
     metric: SensorMetric
     accepted: bool
     created_at: str
+    analysis: Optional[List[str]] = None
 
 
 READINGS: List[Dict] = []
+
+
+def get_db_connection() -> psycopg2.extensions.connection:
+    return psycopg2.connect(DB_DSN)
+
+
+def init_database() -> None:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS readings (
+                    reading_id TEXT PRIMARY KEY,
+                    device_id TEXT NOT NULL,
+                    metric TEXT NOT NULL,
+                    value DOUBLE PRECISION NOT NULL,
+                    unit TEXT,
+                    timestamp TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    ai_analysis JSONB
+                )
+                """
+            )
+            conn.commit()
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    init_database()
+
+
+def save_reading_to_db(item: Dict[str, Any], analysis: Optional[List[str]] = None) -> None:
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO readings (
+                    reading_id,
+                    device_id,
+                    metric,
+                    value,
+                    unit,
+                    timestamp,
+                    created_at,
+                    ai_analysis
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    item["reading_id"],
+                    item["device_id"],
+                    item["metric"],
+                    item["value"],
+                    item["unit"],
+                    item["timestamp"],
+                    item["created_at"],
+                    Json(analysis) if analysis is not None else None,
+                ),
+            )
+            conn.commit()
+
+
+def get_ai_prediction() -> Optional[List[str]]:
+    try:
+        response = requests.post(f"{AI_SERVICE_URL}/predict", timeout=5)
+        response.raise_for_status()
+        payload = response.json()
+        objects = payload.get("objects") if isinstance(payload, dict) else None
+        if isinstance(objects, list):
+            return [str(value) for value in objects]
+    except requests.RequestException:
+        return None
 
 
 def build_problem(
@@ -225,6 +311,9 @@ def create_reading(payload: SensorReadingCreate, response: Response) -> SensorRe
         "timestamp": payload.timestamp,
         "created_at": created_at,
     }
+
+    analysis = get_ai_prediction()
+    save_reading_to_db(item, analysis)
     READINGS.append(item)
 
     return SensorReadingCreated(
@@ -233,6 +322,7 @@ def create_reading(payload: SensorReadingCreate, response: Response) -> SensorRe
         metric=payload.metric,
         accepted=True,
         created_at=created_at,
+        analysis=analysis,
     )
 
 

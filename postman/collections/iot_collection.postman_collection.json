@@ -1,0 +1,123 @@
+{
+  "info": {
+    "name": "Core Business Service — Session 6 Integration",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Core Business service integration tests. Supports REST sync (Policy Evaluate, Event Process) and MQTT async (IoT events, Camera events, Notifications).",
+    "version": "2.0.0"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "your_dummy_token_here",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Evaluate policy",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"subject_id\": \"user-001\",\n  \"action\": \"enter-restricted-area\",\n  \"context\": {\n    \"location\": \"building-a\",\n    \"clearance_level\": 3\n  },\n  \"timestamp\": \"2026-06-18T08:30:00+07:00\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/policy/evaluate",
+          "host": ["{{baseUrl}}"],
+          "path": ["policy", "evaluate"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Process event",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"event_id\": \"EVT-20260618-0001\",\n  \"event_type\": \"motion_detected\",\n  \"source\": \"camera-01\",\n  \"payload\": {\n    \"confidence\": 0.95,\n    \"region\": \"entrance\"\n  },\n  \"timestamp\": \"2026-06-18T08:30:00+07:00\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/event/process",
+          "host": ["{{baseUrl}}"],
+          "path": ["event", "process"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get all policies",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/policy",
+          "host": ["{{baseUrl}}"],
+          "path": ["policy"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get all events",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/events",
+          "host": ["{{baseUrl}}"],
+          "path": ["events"]
+        }
+      },
+      "response": []
+    }
+  ]
+}
