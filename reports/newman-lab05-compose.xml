@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Core Business Service — Session 6 Integration" tests="5" time="10.133">
+  <testsuite name="Health check" id="bd55f964-12dc-494b-a9fb-51ec892c9eb4" timestamp="2026-06-19T01:13:24.851Z" tests="0" failures="0" errors="0" time="0.050"/>
+  <testsuite name="Evaluate policy" id="159a8930-a9ff-44f2-8707-121491eb9d2c" timestamp="2026-06-19T01:13:24.851Z" tests="0" failures="0" errors="0" time="5.035"/>
+  <testsuite name="Process event" id="f40e04c5-2ee8-47d3-84c1-7ba73631592a" timestamp="2026-06-19T01:13:24.851Z" tests="0" failures="0" errors="0" time="5.035"/>
+  <testsuite name="Get all policies" id="6f7fa64d-36ff-450d-a6f8-4305bfeef0e4" timestamp="2026-06-19T01:13:24.851Z" tests="0" failures="0" errors="0" time="0.007"/>
+  <testsuite name="Get all events" id="11eba3f5-7f5a-4512-ba0f-faff09a3e177" timestamp="2026-06-19T01:13:24.851Z" tests="0" failures="0" errors="0" time="0.006"/>
+</testsuites>

@@ -3,42 +3,53 @@ import os
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
-
 import psycopg2
 from psycopg2.extras import Json
 import requests
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-# Đọc biến môi trường với giá trị mặc định
-SERVICE_NAME = os.getenv("SERVICE_NAME", "core-business")
-SERVICE_VERSION = os.getenv("SERVICE_VERSION", "0.5.0")
-AUTH_TOKEN = os.getenv("AUTH_TOKEN", "local-dev-token")
-DB_HOST = os.getenv("DB_HOST", "db")
-DB_PORT = int(os.getenv("DB_PORT", "5432"))
+# IMPORT CLIENT CỦA BẠN VÀO ĐÂY
+# ... [Các thư viện import của bạn ở trên] ...
+from src.clients.mqtt_client import MQTTClient 
+
+# =====================================================================
+# THÊM ĐOẠN NÀY: CẤU HÌNH BIẾN MÔI TRƯỜNG & CHUỖI KẾT NỐI
+# =====================================================================
+DB_HOST = os.getenv("DB_HOST", "lab05-db")
+DB_PORT = os.getenv("DB_PORT", "5432")
 POSTGRES_USER = os.getenv("POSTGRES_USER", "lab05_user")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "lab05_password")
-POSTGRES_DB = os.getenv("POSTGRES_DB", "lab05_db")
-AI_VISION_URL = os.getenv("AI_VISION_URL", "http://ai-service:9000")
-ACCESS_GATE_URL = os.getenv("ACCESS_GATE_URL", "http://localhost:8001")
-NOTIFICATION_URL = os.getenv("NOTIFICATION_URL", "http://localhost:8002")
-ANALYTICS_URL = os.getenv("ANALYTICS_URL", "http://localhost:8003")
-DB_DSN = (
-    f"dbname={POSTGRES_DB} user={POSTGRES_USER} password={POSTGRES_PASSWORD} "
-    f"host={DB_HOST} port={DB_PORT}"
-)
+POSTGRES_DB = os.getenv("POSTGRES_DB", "lab05_db")  # Đảm bảo kết nối đúng tên database
+
+# Định nghĩa DB_DSN ở phạm vi global
+DB_DSN = f"host={DB_HOST} port={DB_PORT} user={POSTGRES_USER} password={POSTGRES_PASSWORD} dbname={POSTGRES_DB}"
+
+# Khai báo luôn các URL dịch vụ khác để tránh lỗi NameError tương tự ở các hàm call API
+AI_VISION_URL = os.getenv("AI_VISION_URL", "http://lab05-ai-service:9000")
+ACCESS_GATE_URL = os.getenv("ACCESS_GATE_URL", "http://lab05-access-gate:8000")
+NOTIFICATION_URL = os.getenv("NOTIFICATION_URL", "http://lab05-notification:8000")
+ANALYTICS_URL = os.getenv("ANALYTICS_URL", "http://lab05-analytics:8000")
+AUTH_TOKEN = os.getenv("AUTH_TOKEN", "default_secret_token")
+SERVICE_NAME = os.getenv("SERVICE_NAME", "core-business-service")
+SERVICE_VERSION = os.getenv("SERVICE_VERSION", "1.0.0")
+# =====================================================================
+
+app = FastAPI(title="FIT4110 Lab 05 - Core Business Service")
 
 
-app = FastAPI(
-    title="FIT4110 Lab 05 - Core Business Service",
-    version=SERVICE_VERSION,
-    description=(
-        "Core Business Service xử lý nghiệp vụ trung tâm cho Smart Campus Operations Platform. "
-        "Dịch vụ này tích hợp với AI Vision, Access Gate, Notification và Analytics."
-    ),
-)
+# Biến global lưu trữ mqtt client
+mqtt_client = None
+
+# KHỞI TẠO CÁC DỊCH VỤ KHI APP STARTUP
+@app.on_event("startup")
+def startup_event():
+    init_database()
+    global mqtt_client
+    mqtt_client = MQTTClient()
+    mqtt_client.start()
 
 
 class PolicyDecision(str, Enum):
@@ -138,11 +149,6 @@ def init_database() -> None:
                 """
             )
             conn.commit()
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    init_database()
 
 
 def save_policy_to_db(policy: Dict[str, Any]) -> None:
@@ -335,7 +341,7 @@ def verify_bearer_token(authorization: Optional[str] = Header(default=None)) -> 
                 title="Unauthorized",
                 detail="Invalid bearer token",
                 problem_type="https://smart-campus.local/problems/unauthorized",
-            ),
+                ),
         )
 
 
@@ -411,7 +417,7 @@ def evaluate_policy(payload: PolicyEvaluationRequest) -> PolicyEvaluationRespons
 
 
 @app.post(
-    "/events",
+    "/event/process",
     response_model=EventProcessResponse,
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(verify_bearer_token)],
